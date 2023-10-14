@@ -1,44 +1,23 @@
-#[derive(Debug, PartialEq, Eq)]
-enum Casa {
-    X,
-    O,
-}
+use std::io;
 
-pub struct Config {
-    melhor_de: u32,
-}
-
-impl Config {
-    pub fn build(mut args: impl Iterator<Item = String>) -> Result<Config, &'static str> {
-        args.next();
-        
-        let melhor_de: u32 = match args.next() {
-            Some(arg) => arg.parse().expect("Quantidade de partidas devem ser um número"),
-            None => 1
-        };
-
-        return Ok(Config { melhor_de });
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Jogador {
     X,
     O,
 }
 
 impl Jogador {
-    fn casa(&self) -> Casa {
-        match self {
-            Jogador::X => Casa::X,
-            Jogador::O => Casa::O,
-        }
-    }
-
     fn outro(&self) -> Jogador {
         match self {
             Jogador::X => Jogador::O,
             Jogador::O => Jogador::X,
+        }
+    }
+
+    fn to_string(&self) -> String {
+        match self {
+            Jogador::X => String::from("X"),
+            Jogador::O => String::from("O"),
         }
     }
 }
@@ -48,13 +27,13 @@ enum Estado {
         rodada: u8,
     },
     Finalizado {
-        vencedor: Jogador,
-        combinacao_vitoriosa: [usize; 3],
+        vencedor: Option<Jogador>,
+        combinacao_vitoriosa: Option<[usize; 3]>,
     },
 }
 
 pub struct Partida {
-    tabuleiro: [Option<Casa>; 9],
+    tabuleiro: [Option<Jogador>; 9],
     jogador_atual: Jogador,
     estado: Estado,
 }
@@ -68,14 +47,90 @@ impl Partida {
         }
     }
 
-    fn reiniciar(&mut self) {
-        *self = Partida::new();
-        self.jogar();
+    pub fn jogar(&mut self) {
+        while let Estado::Jogando { rodada: _ } = self.estado {
+            self.mostrar_tabuleiro(None);
+            self.pedir_movimento();
+            if let None = self.verificar_vencedor() {
+                self.proxima_rodada();
+            }
+        }
+
+        if let Estado::Finalizado {
+            vencedor,
+            combinacao_vitoriosa,
+        } = &self.estado
+        {
+            if let Some(jogador) = vencedor {
+                self.mostrar_tabuleiro(*combinacao_vitoriosa);
+                println!("Jogador {:?} venceu!", jogador);
+            } else {
+                self.mostrar_tabuleiro(None);
+                println!("Empate: Jogo deu velha!");
+            }
+        }
     }
 
-    pub fn jogar(&mut self) {}
+    fn mostrar_tabuleiro(&self, destacar: Option<[usize; 3]>) {
+        limpar_tela();
+        for (i, jogador) in self.tabuleiro.iter().enumerate() {
+            if let None = jogador {
+                print!("|{}", (i + 1).to_string());
+            } else {
+                if let Some(p) = destacar {
+                    if p.contains(&i) {
+                        print!(
+                            "|{}",
+                            destacar_verde(&jogador.as_ref().unwrap().to_string())
+                        )
+                    } else {
+                        print!(
+                            "|{}",
+                            destacar_amarelo(&jogador.as_ref().unwrap().to_string())
+                        )
+                    }
+                } else {
+                    print!(
+                        "|{}",
+                        destacar_amarelo(&jogador.as_ref().unwrap().to_string())
+                    )
+                }
+            }
 
-    fn verificar_vencedor(&mut self) -> Option<&Casa> {
+            if (i + 1) % 3 == 0 {
+                println!("|");
+            }
+        }
+    }
+
+    fn pedir_movimento(&mut self) {
+        loop {
+            println!("\nDigite a posição desejada conforme o tabuleiro: ");
+
+            let mut entrada = String::new();
+            io::stdin()
+                .read_line(&mut entrada)
+                .expect("Erro ao ler entrada");
+
+            let entrada: usize = match entrada.trim().parse() {
+                Ok(pos) if pos >= 1 && pos <= 9 => pos,
+                _ => {
+                    println!("Posição inválida: Digite um valor entre 1 e 9!");
+                    continue;
+                }
+            };
+
+            match &self.tabuleiro[entrada - 1] {
+                None => {
+                    self.tabuleiro[entrada - 1] = Some(self.jogador_atual.clone());
+                    break;
+                }
+                _ => println!("Já existe uma marcação na posição especificada!"),
+            };
+        }
+    }
+
+    fn verificar_vencedor(&mut self) -> Option<&Jogador> {
         // Retornar campos vencedores depois
         let combinacoes_vitoria = [
             // * Linhas
@@ -93,23 +148,123 @@ impl Partida {
 
         for combinacao in &combinacoes_vitoria {
             let [a, b, c] = [combinacao[0], combinacao[1], combinacao[2]];
-            if let Some(casa) = &self.tabuleiro[a] {
+            if let Some(jogador) = &self.tabuleiro[a] {
                 if self.tabuleiro[a] == self.tabuleiro[b] && self.tabuleiro[b] == self.tabuleiro[c]
                 {
-                    let vencedor = match casa {
-                        Casa::X => Jogador::X,
-                        Casa::O => Jogador::O,
-                    };
-
                     self.estado = Estado::Finalizado {
-                        combinacao_vitoriosa: [a, b, c],
-                        vencedor,
+                        combinacao_vitoriosa: Some([a, b, c]),
+                        vencedor: Some(jogador.clone()),
                     };
-                    return Some(casa);
+                    return Some(&jogador);
                 }
             }
         }
 
         return None;
+    }
+
+    fn proxima_rodada(&mut self) {
+        if let Estado::Jogando { ref mut rodada } = self.estado {
+            if *rodada < 9 {
+                *rodada += 1;
+                self.jogador_atual = self.jogador_atual.outro();
+            } else {
+                self.estado = Estado::Finalizado {
+                    vencedor: None,
+                    combinacao_vitoriosa: None,
+                }
+            }
+        }
+    }
+}
+
+fn destacar_verde(texto: &str) -> String {
+    return format!("\x1b[32m{}\x1b[0m", texto);
+}
+
+fn destacar_amarelo(texto: &str) -> String {
+    return format!("\x1b[33m{}\x1b[0m", texto);
+}
+
+fn limpar_tela() {
+    print!("\x1B[2J\x1B[1;1H");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nenhum_vencedor() {
+        let mut p = Partida::new();
+        assert!(p.verificar_vencedor().is_none());
+    }
+
+    #[test]
+    fn vencedor_linha() {
+        let mut p = Partida::new();
+        p.tabuleiro = [
+            Some(Jogador::O),
+            Some(Jogador::O),
+            Some(Jogador::O),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ];
+        assert_eq!(p.verificar_vencedor(), Some(&Jogador::O));
+    }
+
+    #[test]
+    fn vencedor_coluna() {
+        let mut p = Partida::new();
+        p.tabuleiro = [
+            Some(Jogador::X),
+            None,
+            None,
+            Some(Jogador::X),
+            None,
+            None,
+            Some(Jogador::X),
+            None,
+            None,
+        ];
+        assert_eq!(p.verificar_vencedor(), Some(&Jogador::X));
+    }
+
+    #[test]
+    fn vencedor_diagonal() {
+        let mut p = Partida::new();
+        p.tabuleiro = [
+            Some(Jogador::X),
+            Some(Jogador::O),
+            Some(Jogador::X),
+            Some(Jogador::O),
+            Some(Jogador::X),
+            Some(Jogador::O),
+            Some(Jogador::O),
+            Some(Jogador::X),
+            Some(Jogador::X),
+        ];
+        assert_eq!(p.verificar_vencedor(), Some(&Jogador::X));
+    }
+
+    #[test]
+    fn empate() {
+        let mut p = Partida::new();
+        p.tabuleiro = [
+            Some(Jogador::O),
+            Some(Jogador::O),
+            Some(Jogador::X),
+            Some(Jogador::X),
+            Some(Jogador::X),
+            Some(Jogador::O),
+            Some(Jogador::O),
+            Some(Jogador::X),
+            Some(Jogador::X),
+        ];
+        assert_eq!(p.verificar_vencedor(), None);
     }
 }
