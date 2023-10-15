@@ -74,27 +74,20 @@ impl Partida {
     fn mostrar_tabuleiro(&self, destacar: Option<[usize; 3]>) {
         limpar_tela();
         for (i, jogador) in self.tabuleiro.iter().enumerate() {
+            let cor;
             if let None = jogador {
                 print!("|{}", (i + 1).to_string());
             } else {
-                if let Some(p) = destacar {
+                cor = if let Some(p) = destacar {
                     if p.contains(&i) {
-                        print!(
-                            "|{}",
-                            destacar_verde(&jogador.as_ref().unwrap().to_string())
-                        )
+                        "\x1b[32m" // Verde
                     } else {
-                        print!(
-                            "|{}",
-                            destacar_amarelo(&jogador.as_ref().unwrap().to_string())
-                        )
+                        "\x1b[33m" // Amarelo
                     }
                 } else {
-                    print!(
-                        "|{}",
-                        destacar_amarelo(&jogador.as_ref().unwrap().to_string())
-                    )
-                }
+                    "\x1b[33m" // Amarelo
+                };
+                print_colorido(&jogador.as_ref().unwrap().to_string(), cor);
             }
 
             if (i + 1) % 3 == 0 {
@@ -178,12 +171,8 @@ impl Partida {
     }
 }
 
-fn destacar_verde(texto: &str) -> String {
-    return format!("\x1b[32m{}\x1b[0m", texto);
-}
-
-fn destacar_amarelo(texto: &str) -> String {
-    return format!("\x1b[33m{}\x1b[0m", texto);
+fn print_colorido(texto: &str, cor_ansi: &str) {
+    print!("{}{}{}", cor_ansi, texto, "\x1b[0m");
 }
 
 fn limpar_tela() {
