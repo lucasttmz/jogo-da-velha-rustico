@@ -1,6 +1,6 @@
 use std::io;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum Jogador {
     X,
     O,
@@ -87,6 +87,7 @@ impl Partida {
                 } else {
                     "\x1b[33m" // Amarelo
                 };
+                print!("|");
                 print_colorido(&jogador.as_ref().unwrap().to_string(), cor);
             }
 
@@ -105,25 +106,22 @@ impl Partida {
                 .read_line(&mut entrada)
                 .expect("Erro ao ler entrada");
 
-            let entrada: usize = match entrada.trim().parse() {
-                Ok(pos) if pos >= 1 && pos <= 9 => pos,
-                _ => {
-                    println!("Posição inválida: Digite um valor entre 1 e 9!");
-                    continue;
+            match entrada.trim().parse::<usize>() {
+                Ok(pos @ 1..=9) => {
+                    if let Some(_) = &self.tabuleiro[pos - 1] {
+                        println!("Já existe uma marcação na posição especificada!");
+                    } else {
+                        self.tabuleiro[pos - 1] = Some(self.jogador_atual);
+                        break;
+                    }
                 }
-            };
-
-            match &self.tabuleiro[entrada - 1] {
-                None => {
-                    self.tabuleiro[entrada - 1] = Some(self.jogador_atual.clone());
-                    break;
-                }
-                _ => println!("Já existe uma marcação na posição especificada!"),
-            };
+                _ => println!("Posição inválida: Digite um valor entre 1 e 9!"),
+            }
+    
         }
     }
 
-    fn verificar_vencedor(&mut self) -> Option<&Jogador> {
+    fn verificar_vencedor(&mut self) -> Option<Jogador> {
         // Retornar campos vencedores depois
         let combinacoes_vitoria = [
             // * Linhas
@@ -146,9 +144,9 @@ impl Partida {
                 {
                     self.estado = Estado::Finalizado {
                         combinacao_vitoriosa: Some([a, b, c]),
-                        vencedor: Some(jogador.clone()),
+                        vencedor: Some(*jogador),
                     };
-                    return Some(&jogador);
+                    return Some(*jogador);
                 }
             }
         }
@@ -203,7 +201,7 @@ mod tests {
             None,
             None,
         ];
-        assert_eq!(p.verificar_vencedor(), Some(&Jogador::O));
+        assert_eq!(p.verificar_vencedor(), Some(Jogador::O));
     }
 
     #[test]
@@ -220,7 +218,7 @@ mod tests {
             None,
             None,
         ];
-        assert_eq!(p.verificar_vencedor(), Some(&Jogador::X));
+        assert_eq!(p.verificar_vencedor(), Some(Jogador::X));
     }
 
     #[test]
@@ -237,7 +235,7 @@ mod tests {
             Some(Jogador::X),
             Some(Jogador::X),
         ];
-        assert_eq!(p.verificar_vencedor(), Some(&Jogador::X));
+        assert_eq!(p.verificar_vencedor(), Some(Jogador::X));
     }
 
     #[test]
